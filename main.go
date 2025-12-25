@@ -11,6 +11,7 @@ import (
 	"job_portal/internal/email"
 	"job_portal/internal/handler"
 	"job_portal/internal/middleware"
+	"job_portal/internal/profile"
 	"job_portal/internal/repository"
 	"job_portal/internal/service"
 
@@ -43,6 +44,7 @@ func main() {
 
 	userRepo := repository.NewUserRepository(db.DB)
 	pendingRepo := repository.NewPendingSignupRepository(db.DB)
+	profileRepo := profile.NewRepository(db.DB)
 
 	emailCfg, err := configs.LoadEmailConfig()
 	var mailer service.EmailSender
@@ -60,17 +62,16 @@ func main() {
 
 	authService := service.NewAuthService(userRepo, pendingRepo, mailer)
 	authHandler := handler.NewAuthHandler(authService)
+	profileService := profile.NewService(profileRepo, userRepo)
+	profileHandler := profile.NewHandler(profileService)
 
 	http.HandleFunc("/api/v1/auth/signup", authHandler.SignUp)
 	http.HandleFunc("/api/v1/auth/verify-otp", authHandler.VerifyOTP)
 	http.HandleFunc("/api/v1/auth/resend-otp", authHandler.ResendOTP)
 	http.HandleFunc("/api/v1/auth/signin", authHandler.SignIn)
 
-	// Example protected routes with role-based access
-	http.Handle("/api/v1/profile", middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message": "User profile (all authenticated users)"}`))
-	})))
+	// Profile completion endpoint for authenticated app users
+	http.Handle("/api/v1/profile", middleware.RequireAuth(http.HandlerFunc(profileHandler.Complete)))
 
 	http.Handle("/api/v1/hirer-only", middleware.RequireEmployer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -87,8 +88,8 @@ func main() {
 		w.Write([]byte(`{"message": "Hirer only content (admin functionality removed)"}`))
 	})))
 
-	ui.Banner("Server ready", "Listening on http://192.168.1.103:8080")
-	if err := http.ListenAndServe("192.168.1.103:8080", nil); err != nil {
+	ui.Banner("Server ready", "Listening on http://192.168.1.105:8080")
+	if err := http.ListenAndServe("192.168.1.105:8080", nil); err != nil {
 		log.Fatalf("server failed to start: %v", err)
 	}
 }
